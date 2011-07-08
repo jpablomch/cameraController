@@ -24,7 +24,7 @@ OHCamera::OHCamera(int cameraNum):mIOService(), mSocket(mIOService), endProgram(
   sendCamposeApproved = false;
   
   skipFrame = 0;
-  robotArea = 450;
+  robotArea = 398;
   beatCircle = 15;
   beatIncrease = true;
   
@@ -37,7 +37,7 @@ OHCamera::OHCamera(int cameraNum):mIOService(), mSocket(mIOService), endProgram(
   realGridDownLeftY = 0;//287;
   realGridDownRightX = 0;//449; 
   realGridDownRightY = 0;//274;
-  tempWidth = 330;//313;
+  tempWidth = 323; //330;//313;
   tempHeigth = 253;//230;
 
   mapHeight = 200; 
@@ -679,7 +679,7 @@ void OHCamera::findShapes(IplImage* img, int robotArea, IplImage* ret)
 		
         result = cvApproxPoly(contours, sizeof(CvContour), storage,
 							  CV_POLY_APPROX_DP, cvContourPerimeter(contours)*0.02, 1);
-        if(result->total==4 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > robotArea-100 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) < robotArea+100) // 4000
+        if(result->total==4 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > robotArea-15 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) < robotArea+15) // 4000
         {
 			//cout << "Robot Area: " << fabs(cvContourArea(result, CV_WHOLE_SEQ)) << endl;
 			//cout << "Robot Detected" << endl;
@@ -994,6 +994,7 @@ void OHCamera::findShapes(IplImage* img, int robotArea, IplImage* ret)
 				
 			}
 			else {
+				sendCamposeApproved = false;
 				cout << "UO";
 			}
 
