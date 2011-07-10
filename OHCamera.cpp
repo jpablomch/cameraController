@@ -14,10 +14,17 @@
 using namespace metrobotics;
 
 //OHCamera::OHCamera(string host, string dbname, string user, string pwd):mIOService(), mSocket(mIOService), host(host), dbname(dbname), user(user), pwd(pwd){
-OHCamera::OHCamera(int cameraNum):mIOService(), mSocket(mIOService), endProgram(false){
+OHCamera::OHCamera(int cameraNum, string botN[]):mIOService(), mSocket(mIOService), endProgram(false){
   mNameID = UID_OHCAMERA;
   mTypeID = SID_OHCAMERA;
-  uniqueRobotIdTracking = -1;
+  
+  for(int i=0; i<MAXROBOTS; i++){
+  	initId(bots[i], botN[i]);
+  }
+  
+
+
+  uniqueRobotIdTracking = -1; // Get Rid of this.
   ident_sent = false;
   ident_proc = false;
   camera = cameraNum;
@@ -25,6 +32,8 @@ OHCamera::OHCamera(int cameraNum):mIOService(), mSocket(mIOService), endProgram(
   
   skipFrame = 0;
   robotArea = 398;
+  difAreaAr = 65; // Put this in definitions
+  difAreaAb = 45; // SAme. 
   beatCircle = 15;
   beatIncrease = true;
   
@@ -38,11 +47,11 @@ OHCamera::OHCamera(int cameraNum):mIOService(), mSocket(mIOService), endProgram(
   realGridDownRightX = 0;//449; 
   realGridDownRightY = 0;//274;
   tempWidth = 323; //330;//313;
-  tempHeigth = 253;//230;
+  tempHeigth = 255; // 253;//230;
 
   mapHeight = 200; 
 
-  binaryThresholdMin = 220;
+  binaryThresholdMin = 170; //200;//220;
   binaryThresholdMax = 250;
   upperLeftCornerX = 50;
   upperLeftCornerY = 50;
@@ -132,6 +141,14 @@ void OHCamera::update(){
 		} break;
 	}
 	
+}
+void OHCamera::initId(botId  &bo, string name){
+	bo.sessionId = -1;
+	bo.posX = -1;
+	bo.posY = -1;
+	bo.thetaR = 0.0;
+	bo.sendCampose = false;
+	bo.name = name;
 }
 bool OHCamera::connect(const string& hostname, unsigned short port){
 	using namespace boost::system;
@@ -244,6 +261,25 @@ void OHCamera::do_state_action_campose_send()
 		//do_state_change(STATE_IDLE);
 	}
 	
+}
+void OHCamera::do_state_action_campose_sendMulti(int index)
+{
+	// Prepend function signature to error messages.
+	static const string signature = "OHCamera::do_state_campose_send()";
+	stringstream ss;
+	ss << CMD_CAMPOSE << " " << bots[index].sessionId << " " << bots[index].posX << " " << bots[index].posY << " " << bots[index].thetaR;
+	//usleep(1);
+	if (write(ss)) {
+		//cerr << signature << " - success; next state: STATE_IDLE" << endl;
+		mStateTimer.start();
+		//do_state_change(STATE_IDLE);
+	} else if (mStateTimer.elapsed() >= MAX_TIME_STATE) {
+		cerr << signature << " - timeout; next state: STATE_QUIT" << endl;
+		do_state_change(STATE_QUIT);
+	} else {
+		cerr << signature << " - failure; next state: STATE_IDLE" << endl;
+		//do_state_change(STATE_IDLE);
+	}
 }
 void OHCamera::do_state_action_ident()
 {
@@ -425,9 +461,20 @@ void OHCamera::do_state_action_cmd_proc()
 						}
 					}
 				}
+				for(int j=0; j<MAXROBOTS; j++){
 
-				uniqueRobotIdTracking = robot_id; 
-				cout << "Unique Robot ID: " << uniqueRobotIdTracking << endl;
+					if(robot_name.find(bots[j].name)== 0){
+						cout << "Robot in Ident" << endl;
+						bots[j].sessionId = robot_id;	
+						cout << bots[j].name << " " << robot_name << " " << endl;
+					}
+					else{
+						cout << "Error in Ident" << endl;	
+						cout << bots[j].name << " " << robot_name << " " << endl;
+					}
+				}
+				//uniqueRobotIdTracking = robot_id; 
+				//cout << "Unique Robot ID: " << uniqueRobotIdTracking << endl;
 			}
 			ident_proc = true;
 			cout << uniqueRobotIdTracking << endl; 
@@ -617,8 +664,8 @@ void OHCamera::imageLoop(){
 		//cvLine(finalFrame, cvPoint(lowerRightCornerX, lowerRightCornerY),cvPoint(lowerLeftCornerX, lowerLeftCornerY) , cvScalar(255));
 		//cvLine(finalFrame, cvPoint(lowerLeftCornerX, lowerLeftCornerY),cvPoint(upperLeftCornerX, upperLeftCornerY) , cvScalar(255));
 		
-		// Approve sending the message to Skygrid
-		sendCamposeApproved = true;
+		// Approve sending the message to Skygrid // OLD
+		//sendCamposeApproved = true;
 		
 		cvShowImage("video", frame);//finalFrame);
 		//cvShowImage("processed", binary_im);
@@ -641,6 +688,7 @@ void OHCamera::imageLoop(){
 		}
 		
 	}
+
 	
 }
 
@@ -679,9 +727,9 @@ void OHCamera::findShapes(IplImage* img, int robotArea, IplImage* ret)
 		
         result = cvApproxPoly(contours, sizeof(CvContour), storage,
 							  CV_POLY_APPROX_DP, cvContourPerimeter(contours)*0.02, 1);
-        if(result->total==4 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > robotArea-15 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) < robotArea+15) // 4000
+        if(result->total==4 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > robotArea-difAreaAb && fabs(cvContourArea(result, CV_WHOLE_SEQ)) < robotArea+difAreaAr) // 4000
         {
-			//cout << "Robot Area: " << fabs(cvContourArea(result, CV_WHOLE_SEQ)) << endl;
+			cout << "Robot Area: " << fabs(cvContourArea(result, CV_WHOLE_SEQ)) << endl;
 			//cout << "Robot Detected" << endl;
             CvPoint *pt[4];
             for(int i=0;i<4;i++)
@@ -987,32 +1035,28 @@ void OHCamera::findShapes(IplImage* img, int robotArea, IplImage* ret)
 					id++;
 				if(AbIScal.val[0] == 0)
 					id++;
-				cout << "Robot " << id << " identified" << endl;
+				cout << "Robot " << bots[id-1].name << " identified" << endl;
 				centerx = realGridUpLeftX + (tempWidth*centerx)/ret->width;
 				centery = mapHeight - (realGridUpLeftY + (tempHeigth*centery)/ret->height);				
-				cout << "Robot " << id << " pos: " << centerx << ", " << centery << ", " << theta << endl;
+				cout << "Robot " << bots[id-1].name << " pos: " << centerx << ", " << centery << ", " << theta << endl;
+				
+				bots[id-1].posX = centerx;
+				bots[id-1].posY = centery;
+				bots[id-1].thetaR = theta;
+				bots[id-1].sendCampose = true;
+				skipFrame = 0;
 				
 			}
 			else {
-				sendCamposeApproved = false;
+				//sendCamposeApproved = false;
 				cout << "UO";
 			}
 
 			// End of Robot Id.			
-			
-			posX = centerx;
-			posY = centery;
-			thetaR = theta;
-			
-            
 			//centerx = centerx;
             //centery = ret->height - centery;
 			
 			
-			
-			
-			
-			skipFrame = 0;
         }
         contours = contours->h_next;
     }

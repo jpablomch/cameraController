@@ -25,7 +25,7 @@ void displayUsage(char** argv){
 	return;
 }
 
-void readConfigFile(ifstream& cfFile, string& csHost, int& csPort, int& camNum){
+void readConfigFile(ifstream& cfFile, string& csHost, int& csPort, int& camNum, string botNames[]){
   string cmd, tmp;
 
   // parse configuration file + attempt to connect the player and central servers
@@ -47,6 +47,16 @@ void readConfigFile(ifstream& cfFile, string& csHost, int& csPort, int& camNum){
       else if ( cmd == "camera" ){
 	cfFile >> camNum; 
       }
+      else if ( cmd == "botId1" ){
+	cfFile >> botNames[0];
+      }
+      else if ( cmd == "botId2" ){
+	cfFile >> botNames[1];
+      }
+      else if ( cmd == "botId3" ){
+	cfFile >> botNames[2];
+      }
+
       else {
 	cout << "Unknown config command: " << cmd << endl;
 	getline(cfFile, tmp); 
@@ -66,16 +76,17 @@ int main(int argc, char **argv)
     int server_port = 0;// = 6667;
     string server_hostname = "";// = "localhost";
     int cameraNum = -1;
-    //const char* filepath = "../../../config_files/robot.conf";
-	const char* filepath = "../../config_files/robot.conf";
+    const char* filepath = "../../../config_files/robot.conf";
+    //const char* filepath = "../../config_files/robot.conf";
     ifstream configfile(filepath);
-    
+    string botNames[3]; // TODO: Use MAXROBOTS from definitions    
+
     if (!configfile){
       cout << "unable to open file: " << filepath << endl; 
       return 1 ; 
     }
     
-    readConfigFile(configfile, server_hostname, server_port, cameraNum);
+    readConfigFile(configfile, server_hostname, server_port, cameraNum, botNames);
 
     /*    
     if(argc == 1){
@@ -114,9 +125,7 @@ int main(int argc, char **argv)
       return 1;
     }
 	
-    
-    //OHCamera cam(delete1, delete1, delete1, delete1);
-    OHCamera cam(cameraNum);
+    OHCamera cam(cameraNum, botNames);
 
 	
     if(!cam.connect(server_hostname, server_port)){
@@ -124,7 +133,6 @@ int main(int argc, char **argv)
     }
 	cam.startCamera();
 	
-	//cam.cameraThread = new boost::thread(&OHCamera::imageLoop, &cam);
 	cam.cameraThread = new boost::thread(&OHCamera::camBeat, &cam);
 	cout << "Thread created" << endl;
 	

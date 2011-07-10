@@ -26,7 +26,7 @@ using namespace std;
 class OHCamera {
  public:
   //OHCamera(string host, string dbname, string user, string pwd);
-  OHCamera(int cam);
+  OHCamera(int cam, string botsN[]);
   OHCamera(const OHCamera& orig);
   virtual ~OHCamera();
   int  getState() const { return mCurrentState;}
@@ -37,17 +37,40 @@ class OHCamera {
   void init_state();
 	
   boost::thread * cameraThread;
+
+  // Multiple robots
+  static const int MAXROBOTS = 3; // Move to definitions.
+  struct botId{
+	long sessionId;
+	int posX;
+  	int posY; 
+  	double thetaR;
+	bool sendCampose;
+ 	string name;
+  };
+  botId bots[MAXROBOTS];
+  
   void camBeat(){
-		while(true){
-			//cout << "In thread " << endl;
-			//if(uniqueRobotIdTracking != -1 && sendCamposeApproved && ident_proc){
-			if(sendCamposeApproved && ident_proc){
-				do_state_action_campose_send();
-				sendCamposeApproved = false;
-				
-			}
-			usleep(500);
-		}
+//		while(true){
+//			//cout << "In thread " << endl;
+//			//if(uniqueRobotIdTracking != -1 && sendCamposeApproved && ident_proc){
+//			if(sendCamposeApproved && ident_proc){
+//				do_state_action_campose_send();
+//				sendCamposeApproved = false;
+//				
+//			}
+//			usleep(500);
+//		}
+		// Multi-Robot
+	  while(true){
+		  for(int i=0; i<MAXROBOTS; i++){
+			  if(bots[i].sendCampose && bots[i].sessionId != -1 && ident_proc){ // ident. Sorry no updates later like in the GUI. Maybe later.
+				  do_state_action_campose_sendMulti(i);
+				  bots[i].sendCampose = false;
+			  }
+		  }	
+		  usleep(500);
+	  }
   }
   
  private:
@@ -55,7 +78,10 @@ class OHCamera {
   bool ident_sent;
   bool ident_proc;
   bool endProgram; 
-  bool sendCamposeApproved;
+  bool sendCamposeApproved; // TODO: Change this
+	
+  
+	
   
   int mCurrentState;
   int mPreviousState;
@@ -66,6 +92,8 @@ class OHCamera {
   
   bool skipFrame;
   int robotArea;
+  int difAreaAr;
+  int difAreaAb;
   int beatCircle;
   bool beatIncrease;
   
@@ -128,6 +156,7 @@ class OHCamera {
   void do_state_action_ping_send();
   void do_state_action_pong_read();
   void do_state_action_campose_send();
+  void do_state_action_campose_sendMulti(int);
   void do_state_action_ident();
   void do_state_action_cmd_proc();
   
@@ -137,7 +166,8 @@ class OHCamera {
   void findShapes(IplImage* img, int robotArea, IplImage* ret);
   int getImage(int argc, char ** argv); // old main. 
   void imageLoop();
-  void checkKey();	
+  void checkKey();
+  void initId(botId&,string);	
   
 	
   

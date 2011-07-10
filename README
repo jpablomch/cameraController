@@ -1,1 +1,8 @@
-Testing
+In the camera config_files (robot.conf Should we change this to camera.conf?) add the following lines:
+
+camera #camera  (e.g. camera 1)
+botId1 nameOfRobotToTrack  (e.g. botId1 srv12)
+botId2 nameOfRobotToTrack  (e.g. botId2 srv14)
+botId3 nameOfRobotToTrack  (e.g. botId3 BlackFin1)
+
+The name of the robot must match the name given in the Robot Controller. A common mistake (I do it a lot!) is to name the robot in the Robot Controller as srv12 and put in the camera svr12. If the names don't match the camera would not care about tracking that robot. 
