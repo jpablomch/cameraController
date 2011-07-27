@@ -43,7 +43,6 @@ OHCamera::OHCamera(int cameraNum, string botN[], CvPoint camData[]):mIOService()
   calPosPoint = 0;
   
   skipFrame = 0;
-  robotArea = 398;
   difAreaAr = 65; // Put this in definitions
   difAreaAb = 45; // SAme. 
   beatCircle = 15;
@@ -63,7 +62,6 @@ OHCamera::OHCamera(int cameraNum, string botN[], CvPoint camData[]):mIOService()
 
   mapHeight = 200; 
 
-  binaryThresholdMin = 170; //200;//220;
   binaryThresholdMax = 250;
   drop = 0;
   
@@ -290,6 +288,9 @@ void OHCamera::do_state_action_campose_sendMulti(int index)
 	static const string signature = "OHCamera::do_state_campose_send()";
 	stringstream ss;
 	ss << CMD_CAMPOSE << " " << bots[index].sessionId << " " << bots[index].posX << " " << bots[index].posY << " " << bots[index].thetaR;
+	if(macTest){
+		cout << CMD_CAMPOSE << " " << bots[index].sessionId << " " << bots[index].posX << " " << bots[index].posY << " " << bots[index].thetaR << endl;
+	}
 	//usleep(1);
 	if (write(ss)) {
 		//cerr << signature << " - success; next state: STATE_IDLE" << endl;
@@ -644,6 +645,9 @@ void OHCamera::do_state_action_ping_send()
 
 void OHCamera::imageLoop(){
 	//while(true){ // TODO: Use bool
+		if(macTest){
+			cout << "robotArea value: " << robotArea << endl;
+		}
 		frame = cvQueryFrame(capture);
 		if(!frame)
 			return;//0; //break;
@@ -827,7 +831,9 @@ void OHCamera::findShapes(IplImage* img, int robotArea, IplImage* ret)
 							  CV_POLY_APPROX_DP, cvContourPerimeter(contours)*0.02, 1);
         if(result->total==4 && fabs(cvContourArea(result, CV_WHOLE_SEQ)) > robotArea-difAreaAb && fabs(cvContourArea(result, CV_WHOLE_SEQ)) < robotArea+difAreaAr) // 4000
         {
-			cout << "Robot Area: " << fabs(cvContourArea(result, CV_WHOLE_SEQ)) << endl;
+			if(macTest){
+				cout << "Robot Area: " << fabs(cvContourArea(result, CV_WHOLE_SEQ)) << endl;
+			}
 			//cout << "Robot Detected" << endl;
             CvPoint *pt[4];
             for(int i=0;i<4;i++)
@@ -1135,7 +1141,7 @@ void OHCamera::findShapes(IplImage* img, int robotArea, IplImage* ret)
 				cout << "Robot " << bots[id-1].name << " identified" << endl;
 				// new 2D position
 				bots[id-1].thetaR = theta;
-				getPos(centerx, centery, id-1);
+				getPos(centerx, centery, bots, id-1);
 								
 				// old 2D Position
 				//centerx = realGridUpLeftX + (tempWidth*centerx)/ret->width;
@@ -1180,7 +1186,7 @@ void OHCamera::findShapes(IplImage* img, int robotArea, IplImage* ret)
 	return;
 }
 
-void OHCamera::getPos(int x, int y, int id){
+void OHCamera::getPos(int x, int y, botId bots[], int id){
 	CvPoint current = cvPoint(x, y);
 	//cout << x << " " << y << " " << " " << bots[id].name << endl; 
 	// Closest point in pixels
@@ -1419,7 +1425,7 @@ void OHCamera::mouseCall(int event, int x, int y, int flags, void *param){
 				if(static_cast<OHCamera*>(param)->calPosPoint == 99){
 					static_cast<OHCamera*>(param)->ident_proc = true;
 					static_cast<OHCamera*>(param)->bots[0].sessionId = 99;
-					static_cast<OHCamera*>(param)->getPos(x, y, 0);
+					static_cast<OHCamera*>(param)->getPos(x, y, static_cast<OHCamera*>(param)->bots, 0);
 				}
 				else if(static_cast<OHCamera*>(param)->calPosPoint){
 					static_cast<OHCamera*>(param)->setPosPoint(x, y);	

@@ -73,8 +73,11 @@ class OHCamera {
 		  usleep(500);
 	  }
   }
-  int robotArea; // Make this private
+  // TODO: Make this private and use get and set
+  int robotArea;
   bool macTest;
+  int binaryThresholdMin;
+
 	
  private:
   //int uniqueRobotIdTracking; // For now we are tracking only one robot. 
@@ -114,7 +117,6 @@ class OHCamera {
   int mapHeight; 
 
   int camera;
-  int binaryThresholdMin;
   int binaryThresholdMax;
   CvCapture* capture;
   
@@ -185,7 +187,7 @@ class OHCamera {
   CvPoint auxGridPoints[AUXGRIDPOINTS];
   CvPoint cmGridPoints[MAXGRIDPOINTS];
   void drawGrid(IplImage * );
-  void getPos(int, int, int);
+  void getPos(int, int, botId[], int);
   void calcAuxGridPoints();
 	
   int uWidthPix, lWidthPix, lLengthPix, rLengthPix;

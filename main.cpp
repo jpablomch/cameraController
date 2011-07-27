@@ -24,8 +24,13 @@ void displayUsage(char** argv){
 	// exit(1);
 	return;
 }
+struct ConfigData{
+	int robotArea;
+	int light;
+	bool macTest;
+};
 
-void readConfigFile(ifstream& cfFile, string& csHost, int& csPort, int& camNum, string botNames[], CvPoint camData[]){
+void readConfigFile(ifstream& cfFile, string& csHost, int& csPort, int& camNum, string botNames[], CvPoint camData[], ConfigData & conf){
   string cmd, tmp;
 
   // parse configuration file + attempt to connect the player and central servers
@@ -66,6 +71,15 @@ void readConfigFile(ifstream& cfFile, string& csHost, int& csPort, int& camNum, 
 		  cfFile >> camData[9].x >> camData[9].y >> camData[10].x >> camData[10].y >> camData[11].x >> camData[11].y >> camData[12].x >> camData[12].y
 			>> camData[13].x >> camData[13].y >> camData[14].x >> camData[14].y >> camData[15].x >> camData[15].y >> camData[16].x >> camData[16].y
 			>> camData[17].x >> camData[17].y;					  
+	  }
+	  else if ( cmd == "botArea" ){
+		  cfFile >> conf.robotArea;
+	  }
+	  else if ( cmd == "macTest" ){
+		  conf.macTest = true;
+	  }
+	  else if ( cmd == "light" ){
+		  cfFile >> conf.light;
 	  }
 
       else {
@@ -175,8 +189,8 @@ int main(int argc, char **argv)
     string server_hostname = "";// = "localhost";
     int cameraNum = -1;
     //const char* filepath = "../../../config_files/cam.conf";
-    const char* filepath = "../../config_files/cam.conf";
-    //const char* filepath = "config_files/cam.conf";
+    //const char* filepath = "../../config_files/cam.conf";
+    const char* filepath = "config_files/cam.conf";
     ifstream configfile(filepath);
     string botNames[3]; // TODO: Use MAXROBOTS from definitions    
 	CvPoint camData[18];
@@ -185,8 +199,14 @@ int main(int argc, char **argv)
       cout << "unable to open file: " << filepath << endl; 
       return 1 ; 
     }
-    
-    readConfigFile(configfile, server_hostname, server_port, cameraNum, botNames, camData);
+	
+	ConfigData config; 
+	// DEFAULT VALUES IF NO CONF. FILE IS PROVIDED 
+	config.robotArea = 398;
+	config.light = 170;
+	config.macTest = false;
+	
+    readConfigFile(configfile, server_hostname, server_port, cameraNum, botNames, camData, config);
 
     /*    
     if(argc == 1){
@@ -227,6 +247,10 @@ int main(int argc, char **argv)
 	
     OHCamera * cam = new OHCamera(cameraNum, botNames, camData);
 
+	cam->robotArea = config.robotArea;
+	cam->macTest = config.macTest;
+	cam->binaryThresholdMin = config.light;
+	
 	
     if(!cam->connect(server_hostname, server_port)){
         return 1;
