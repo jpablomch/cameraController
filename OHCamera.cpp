@@ -14,21 +14,33 @@
 using namespace metrobotics;
 
 //OHCamera::OHCamera(string host, string dbname, string user, string pwd):mIOService(), mSocket(mIOService), host(host), dbname(dbname), user(user), pwd(pwd){
-OHCamera::OHCamera(int cameraNum, string botN[]):mIOService(), mSocket(mIOService), endProgram(false){
+OHCamera::OHCamera(int cameraNum, string botN[], CvPoint camData[]):mIOService(), mSocket(mIOService), endProgram(false){
   mNameID = UID_OHCAMERA;
   mTypeID = SID_OHCAMERA;
   
   for(int i=0; i<MAXROBOTS; i++){
   	initId(bots[i], botN[i]);
   }
+  for(int i=0; i<9; i++){
+	gridPoints[i] = camData[i];
+  }
+  for(int i=0; i<9; i++){
+	 cmGridPoints[i] = camData[i+9];
+  }
+  uWidthCm = getLineLength(&camData[9], &camData[10]);
+  lWidthCm = getLineLength(&camData[11], &camData[12]);
+  lLengthCm = getLineLength(&camData[9], &camData[12]);
+  rLengthCm = getLineLength(&camData[10], &camData[11]);	
   
+  calcAuxGridPoints();		
+	
 
-
-  uniqueRobotIdTracking = -1; // Get Rid of this.
+  //uniqueRobotIdTracking = -1; // Get Rid of this. Used for only 1 robot
   ident_sent = false;
   ident_proc = false;
   camera = cameraNum;
-  sendCamposeApproved = false;
+ // sendCamposeApproved = false;
+  calPosPoint = 0;
   
   skipFrame = 0;
   robotArea = 398;
@@ -53,22 +65,15 @@ OHCamera::OHCamera(int cameraNum, string botN[]):mIOService(), mSocket(mIOServic
 
   binaryThresholdMin = 170; //200;//220;
   binaryThresholdMax = 250;
-  upperLeftCornerX = 50;
-  upperLeftCornerY = 50;
-  upperRightCornerX = 500;
-  upperRightCornerY = 50;
-  lowerLeftCornerX = 50;
-  lowerLeftCornerY = 500;
-  lowerRightCornerX = 500;
-  lowerRightCornerY = 500;
-  
   drop = 0;
   
   posX = -1;
   posY = -1;
   thetaR = -1;
+  angle = 0; 
+  scale = 0.8; 
   
-  
+
 }
 
 OHCamera::~OHCamera() {
@@ -99,7 +104,7 @@ void OHCamera::update(){
 	
 	error_code ec; // Used to check for errors.
 	
-	// Maintain the state machine.
+	// Maintain the state mstatic_cast<OHCamera*>(param)->calPosPointachine.
 	if(mPreviousState != mCurrentState){
 		cout << "Current state: " << mCurrentState << endl;
 	}
@@ -194,7 +199,24 @@ bool OHCamera::startCamera(){
 		//exit(1);
     }
 	
-	cvNamedWindow("video", 1);
+	cvNamedWindow("video", 1); // CV_WINDOW_NORMAL); // | CV_GUI_NORMAL);
+	cvNamedWindow("control", CV_WINDOW_NORMAL);
+	cvSetMouseCallback("video", &mouseCall, this);
+	//cvCreateButton("pointA", &buttonCall, this, CV_RADIOBOX, 0);
+	//createButton("button5",buttonCall,NULL,CV_RADIOBOX,0);	
+	
+	cvCreateTrackbar("Light", "control", &binaryThresholdMin, 250, NULL); 
+	cvCreateTrackbar("Robot Size", "control", &robotArea, 2000, NULL);
+	cvCreateTrackbar("Range Up", "control", &difAreaAr, 500, NULL);
+	cvCreateTrackbar("Range Down", "control", &difAreaAb, 500, NULL);
+	
+	//cvCreateTrackbar("Upper Width (cm)", "control", &uWidth, 250, NULL);
+	//cvCreateTrackbar("Left Length (cm)", "control", &lLength, 250, NULL);
+	//cvCreateTrackbar("Right Length (cm)", "control", &rLength, 250, NULL);
+	//cvCreateTrackbar("Lower Width (cm)", "control", &lWidth, 250, NULL);	
+	
+	
+		
 	//cvNamedWindow("processed", 1);
 	return true;
 }
@@ -247,7 +269,7 @@ void OHCamera::do_state_action_campose_send()
 	// Prepend function signature to error messages.
 	static const string signature = "OHCamera::do_state_campose_send()";
 	stringstream ss;
-	ss << CMD_CAMPOSE << " " << uniqueRobotIdTracking << " " << posX << " " << posY << " " << thetaR;
+	//ss << CMD_CAMPOSE << " " << uniqueRobotIdTracking << " " << posX << " " << posY << " " << thetaR;
 	//usleep(1);
 	if (write(ss)) {
 		//cerr << signature << " - success; next state: STATE_IDLE" << endl;
@@ -385,7 +407,7 @@ void OHCamera::do_state_action_idle()
 		do_state_change(STATE_PING_SEND);
 	} else {
 		// PABLO TODO: Create a beat for the CAMPOSE
-		if(uniqueRobotIdTracking==-1 && ident_sent == false){
+		if(ident_sent == false){ //   uniqueRobotIdTracking==-1 && ident_sent == false){
 			do_state_change(STATE_IDENT);
 			ident_sent = true;
 			return;
@@ -477,7 +499,7 @@ void OHCamera::do_state_action_cmd_proc()
 				//cout << "Unique Robot ID: " << uniqueRobotIdTracking << endl;
 			}
 			ident_proc = true;
-			cout << uniqueRobotIdTracking << endl; 
+			//cout << uniqueRobotIdTracking << endl; 
 			do_state_change(STATE_IDLE); return;
 		} else if(cmd.find(CMD_QUIT) != string::npos)
 		{
@@ -621,7 +643,7 @@ void OHCamera::do_state_action_ping_send()
 }
 
 void OHCamera::imageLoop(){
-	while(true){ // TODO: Use bool
+	//while(true){ // TODO: Use bool
 		frame = cvQueryFrame(capture);
 		if(!frame)
 			return;//0; //break;
@@ -630,25 +652,102 @@ void OHCamera::imageLoop(){
 		if(drop%2==0){ // || drop%3==0){
 			return;// 0; //continue;
 		}
-		//finalFrame = doPyrDown(frame);
-		//finalFrame = cvCreateImage(cvSize(frame->width, frame->height), IPL_DEPTH_8U, 3);
-		gray_im = cvCreateImage(cvSize(frame->width, frame->height), IPL_DEPTH_8U, 1);//we changed finalFrame->frame
-		binary_im = cvCreateImage(cvSize(frame->width, frame->height), IPL_DEPTH_8U, 1);//we changed finalFrame->frame
-		cvCvtColor(frame, gray_im, CV_RGB2GRAY);//we changed finalFrame->frame
+		if(macTest){
+			finalFrame = doPyrDown(frame);
+			//IplImage * dst; // TODO: Take this out of here!!
+			dst = cvCloneImage(finalFrame);
+			dst->origin = finalFrame->origin;
+			cvZero (dst);
+			
+			/*
+			int height = finalFrame->height;
+			int width = finalFrame->width;
+			CvPoint2D32f center;
+			center.x = finalFrame->width*0.5f;
+			center.y = finalFrame->height*0.5f;
+			float scale = 0.5f;
+			CvMat N;
+			double trans[] = {
+				0, 1, 0, 1-(scale*cos(90))*center.x -
+				scale*sin(90)*center.y + (height-width)/2
+				-1, 0, (scale*sin(90)*center.x) +
+				(1-scale*cos(90))*center.y + (width-height)/2 };
+			cvInitMatHeader(&N, 2, 3, CV_64F, trans);
+			cvWarpAffine(finalFrame, finalFrame, &N, CV_INTER_LINEAR+CV_WARP_FILL_OUTLIERS,
+						 cvScalarAll(200));
+			*/
+						rot_mat = cvCreateMat(2,3,CV_32FC1); // TODO: Take this out of here!!
+			// Compute rotation matrix
+			CvPoint2D32f center = cvPoint2D32f( finalFrame->width/2, finalFrame->height/2 ); // TODO: Take this out of here!!
+			cv2DRotationMatrix( center, angle, scale, rot_mat );
+			
+			// Do the transformation
+			cvWarpAffine( finalFrame, dst, rot_mat );
+			
+			cvCopy(dst, finalFrame);
+			
+			//finalFrame = cvCreateImage(cvSize(frame->width, frame->height), IPL_DEPTH_8U, 3);
+			gray_im = cvCreateImage(cvSize(finalFrame->width, finalFrame->height), IPL_DEPTH_8U, 1);//we changed finalFrame->frame
+			binary_im = cvCreateImage(cvSize(finalFrame->width, finalFrame->height), IPL_DEPTH_8U, 1);//we changed finalFrame->frame
+			cvCvtColor(finalFrame, gray_im, CV_RGB2GRAY);//we changed finalFrame->frame
+			
+			cvReleaseImage(&dst);
+			cvReleaseMat( &rot_mat );
+
+			
+		}
+		else {	
+			dst = cvCloneImage(frame);
+			dst->origin = frame->origin;
+			cvZero (dst);
+			
+			rot_mat = cvCreateMat(2,3,CV_32FC1); // TODO: Take this out of here!!
+			// Compute rotation matrix
+			CvPoint2D32f center = cvPoint2D32f( frame->width/2, frame->height/2 ); // TODO: Take this out of here!!
+			cv2DRotationMatrix( center, angle, scale, rot_mat );
+			
+			// Do the transformation
+			cvWarpAffine( frame, dst, rot_mat );
+			
+			cvCopy(dst, frame);
+			
+			gray_im = cvCreateImage(cvSize(frame->width, frame->height), IPL_DEPTH_8U, 1);//we changed finalFrame->frame
+			binary_im = cvCreateImage(cvSize(frame->width, frame->height), IPL_DEPTH_8U, 1);//we changed finalFrame->frame
+			cvCvtColor(frame, gray_im, CV_RGB2GRAY);//we changed finalFrame->frame
+			
+			cvReleaseImage(&dst);
+			cvReleaseMat( &rot_mat );
+			
+		}
 		cvThreshold(gray_im, binary_im, binaryThresholdMin, binaryThresholdMax, CV_THRESH_BINARY); 
 		cvErode(binary_im, binary_im);
 		
-		findShapes(binary_im, robotArea, frame); //finalFrame);
-		
+		if(macTest){
+			findShapes(binary_im, robotArea, finalFrame); //finalFrame);
+		}
+		else {
+			findShapes(binary_im, robotArea, frame); //finalFrame);
+		}
 		//cout << "skipFrame = " << skipFrame << endl;
 		if(skipFrame==1){
-			cout << "No Robot" << endl;
-			
+			if(calPosPoint != 99){
+				cout << "No Robot" << endl;
+			}
 			//cvReleaseImage(&frame);
 			skipFrame =0;
-			cvShowImage("video", frame);//finalFrame);
-			//cvShowImage("processed", binary_im);
-			//cvReleaseImage(&finalFrame);
+			if(macTest){
+				drawGrid(finalFrame);
+				cvShowImage("video", finalFrame);//finalFrame);
+				//cvShowImage("processed", binary_im);
+				cvReleaseImage(&finalFrame);
+			}
+			else{
+				drawGrid(frame);
+				cvShowImage("video", frame);//finalFrame);
+				//cvShowImage("processed", binary_im);
+				//cvReleaseImage(&finalFrame);
+			}
+			
 			cvReleaseImage(&gray_im);
 			cvReleaseImage(&binary_im);
 			checkKey();
@@ -658,36 +757,35 @@ void OHCamera::imageLoop(){
 			}
 			return; // 0; //continue;
 		}
-		// Draw Grid for more accuracy
-		//cvLine(finalFrame, cvPoint(upperLeftCornerX, upperLeftCornerY),cvPoint(upperRightCornerX, upperRightCornerY) , cvScalar(255));
-		//cvLine(finalFrame, cvPoint(upperRightCornerX, upperRightCornerY),cvPoint(lowerRightCornerX, lowerRightCornerY) , cvScalar(255));
-		//cvLine(finalFrame, cvPoint(lowerRightCornerX, lowerRightCornerY),cvPoint(lowerLeftCornerX, lowerLeftCornerY) , cvScalar(255));
-		//cvLine(finalFrame, cvPoint(lowerLeftCornerX, lowerLeftCornerY),cvPoint(upperLeftCornerX, upperLeftCornerY) , cvScalar(255));
 		
-		// Approve sending the message to Skygrid // OLD
-		//sendCamposeApproved = true;
-		
-		cvShowImage("video", frame);//finalFrame);
-		//cvShowImage("processed", binary_im);
+		if(displayScreenMsg){
+				
+		}
+		if(macTest){
+			drawGrid(finalFrame);
+			cvShowImage("video", finalFrame);//finalFrame);
+			//cvShowImage("processed", binary_im);
+
+		}
+		else {
+			drawGrid(frame);
+			cvShowImage("video", frame);//finalFrame);
+			//cvShowImage("processed", binary_im);
+		}
+	
 		checkKey();
-		
-		//binaryThresholdMin += 10;
-		//cout << binaryThresholdMin << endl;
-		//end = false;
-		//robotArea+= 5;
-		//cout << "Robot Area: " << robotArea << endl;
-		//checkKey();
 				
 		cvReleaseImage(&gray_im);
 		cvReleaseImage(&binary_im);
-		//cvReleaseImage(&finalFrame);
-		
+		if(macTest){
+			cvReleaseImage(&finalFrame);
+		}
 		if(endProgram){
 			disconnect();
 			exit(1);
 		}
 		
-	}
+	//}
 
 	
 }
@@ -773,7 +871,6 @@ void OHCamera::findShapes(IplImage* img, int robotArea, IplImage* ret)
 			int circ2x;
 			int circ2y;
 			
-
 			
 			//int lineMode = 0;
 			
@@ -1036,14 +1133,21 @@ void OHCamera::findShapes(IplImage* img, int robotArea, IplImage* ret)
 				if(AbIScal.val[0] == 0)
 					id++;
 				cout << "Robot " << bots[id-1].name << " identified" << endl;
-				centerx = realGridUpLeftX + (tempWidth*centerx)/ret->width;
-				centery = mapHeight - (realGridUpLeftY + (tempHeigth*centery)/ret->height);				
-				cout << "Robot " << bots[id-1].name << " pos: " << centerx << ", " << centery << ", " << theta << endl;
-				
-				bots[id-1].posX = centerx;
-				bots[id-1].posY = centery;
+				// new 2D position
 				bots[id-1].thetaR = theta;
-				bots[id-1].sendCampose = true;
+				getPos(centerx, centery, id-1);
+								
+				// old 2D Position
+				//centerx = realGridUpLeftX + (tempWidth*centerx)/ret->width;
+//				centery = mapHeight - (realGridUpLeftY + (tempHeigth*centery)/ret->height);				
+//				cout << "Robot " << bots[id-1].name << " pos: " << centerx << ", " << centery << ", " << theta << endl;
+//				
+//				bots[id-1].posX = centerx;
+//				bots[id-1].posY = centery;
+//				bots[id-1].thetaR = theta;
+//				bots[id-1].sendCampose = true;
+				// end Old 2D Position
+				
 				skipFrame = 0;
 				
 			}
@@ -1076,12 +1180,214 @@ void OHCamera::findShapes(IplImage* img, int robotArea, IplImage* ret)
 	return;
 }
 
+void OHCamera::getPos(int x, int y, int id){
+	CvPoint current = cvPoint(x, y);
+	//cout << x << " " << y << " " << " " << bots[id].name << endl; 
+	// Closest point in pixels
+	// TODO:
+	// Not the best way yet but getting there.
+	int closestIndex = 0;
+	// First get accurate pixel position.
+	int d = 100000; // Change this.
+	int dpts[9];
+	for(int i = 0; i<9; i++){
+		dpts[i] = getLineLength(&gridPoints[i], &current);
+		if(d>dpts[i]){
+			d = dpts[i];
+			closestIndex = i;
+		}
+	}
+	//cout << "Closest Point: " << closestIndex << endl;
+	
+	int dx = -(gridPoints[closestIndex].x - x);
+	
+	int dy = gridPoints[closestIndex].y - y;
+	
+	
+	//cout << x << " " << y << " " << theta << " " << bots[id].name << endl;
+	//cout << dx << " " << dy << endl;
+	
+	// ratio to use
+	
+	// Second get cm position
+	// TODO: use closest points.
+	// Either use uWidthCm or lWidthCm
+	// For testing:
+	double ratioWidth;
+	if(closestIndex == 0 || closestIndex == 1 || closestIndex == 4 || closestIndex == 5){
+		ratioWidth = (double)uWidthCm/(double)uWidthPix;
+	}
+	else {
+		ratioWidth = (double)lWidthCm/(double)lWidthPix;
+	}
+	//cout << ratioWidth << endl;
+	
+	dx *= ratioWidth;
+	
+	x = dx + cmGridPoints[closestIndex].x; 
+
+	
+	// Either use lLengthCm or rLenghtCm
+	double ratioHeight;
+	if(closestIndex == 0 || closestIndex == 3 || closestIndex == 4 || closestIndex == 7){
+		ratioHeight = (double)lLengthCm/(double)lLengthPix;
+	}
+	else {
+		ratioHeight = (double)rLengthCm/(double)rLengthPix;
+	}
+
+	//cout << ratioHeight << endl;
+	dy *= ratioHeight;
+	
+	y = dy + cmGridPoints[closestIndex].y;
+	
+	// Normalize y; USE either lLengthCm or rLengthCm
+	if(closestIndex == 0 || closestIndex == 3 || closestIndex == 4 || closestIndex ==7){
+		//y = lLengthCm - y;
+	}
+	else {
+		//y = rLengthCm - y;
+	}
+
+	//cout << x << " " << y << " " << theta << " " << bots[id].name << endl;
+	
+	//switch(closestIndex){
+//		case 0: 
+//			//x -= gridPoints[closestIndex].x;
+//			//y -= gridPoints[closestIndex].y; 
+//			break;
+//		default:
+//			break;
+//	}
+	
+	// x - left closest point. Either 0, 3, 4, or 7
+	// y - upper closest point. Either 0, 1, 4, 5
+
+	/*
+	int closestIndexX = 0;
+	int closestIndexY = 0;
+	// TODO: Implement 4, 5, 6, 7. 
+	switch(closestIndex){
+		case 0: 
+			closestIndexX = 0;
+			closestIndexY = 0;
+			break;
+		case 1:
+			closestIndexX = 0;
+			//if(gridPoints[5].x>gridPoints[0].x && gridPoints>4 && gridPoints[8]){
+//				closestIndexX = 5;
+//			}
+//			
+//			else {
+//				closestIndexX = 0;
+//			}
+			closestIndexY = 1;
+			break;
+		case 2:
+			closestIndexX = 3;
+			closestIndexY = 1;
+			break;
+		case 3:
+			closestIndexX = 3;
+			closestIndexY = 7;
+			break;
+		default:
+			closestIndexX = 0;
+			closestIndexY = 0;
+			
+	if(current.x > 
+	*/
+	
+	//x -= gridPoints[closestIndex].x;
+//	
+//	// TODO 4 and 5
+//	if(x>gridPoints[8].x){
+//		closestIndex = 1;
+//	}
+//	else {
+//		closestIndex = 0;
+//	}
+//	y -= gridPoints[closestIndex].y; 
+
+//	cout << x << " " << y << " " << theta << " " << bots[id].name << endl;
+	 
+	// Second get cm position
+	// TODO: use closest points.
+	// Either use uWidthCm or lWidthCm
+	// For testing:
+//	double ratioWidth = (double)uWidthCm/(double)uWidthPix;
+//	cout << ratioWidth << endl;
+//	x *= ratioWidth;
+	
+	// Either use lLengthCm or rLenghtCm
+//	double ratioHeight = (double)lLengthCm/(double)lLengthPix;
+//	y *= ratioHeight;
+//	cout << ratioHeight << endl;
+	
+	
+	// Normalize y; USE either lLengthCm or rLengthCm
+//	y = lLengthCm - y;
+	
+//	cout << x << " " << y << " " << theta << " " << bots[id].name << endl;
+
+	
+	
+	bots[id].posX = x;
+	bots[id].posY = y;
+	bots[id].sendCampose = true;
+	
+}
+
 void OHCamera::checkKey(){
 	int keyPressed = cvWaitKey(30); //10
 	switch(keyPressed){
+		
+		case '1':
+			calPosPoint = 1;
+			displayScreenMessage("Click Upper Left Corner Point in Grid", 10);
+			break;
+		case '2':
+			calPosPoint = 2;
+			break;
+		case '3':
+			calPosPoint = 3;
+			break;
+		case '4':
+			calPosPoint = 4;
+			break;
+		case '5':
+			calPosPoint = 5;
+			break;
+		case '6':
+			calPosPoint = 6;
+			break;
+		case '7':
+			calPosPoint = 7;
+			break;
+		case '8':
+			calPosPoint = 8;
+			break;
+		case '9':
+			calPosPoint = 9;
+			break;
+		case ' ':
+			calPosPoint = 0;
+			break;
+		case 'r' :
+			angle +=90;
+			if(angle > 359){
+				angle = 0;
+			}
+			break;
+		case 'm' :
+			macTest = (macTest)?0:1; 
+			break;
+		case 't':
+			calPosPoint = 99;
+			break;
+		// Obsolete		
 		case'a':
 			robotArea++;
-			
 			break;
 		case'z':
 			robotArea--;
@@ -1089,6 +1395,7 @@ void OHCamera::checkKey(){
 				robotArea = 1;
 			}
 			break;
+			///
 			
 			
 		case'q':
@@ -1103,4 +1410,68 @@ int OHCamera::getLineLength(CvPoint* p0, CvPoint * p1){
 void OHCamera::getMidPoint(CvPoint* p0, CvPoint * p1, CvPoint & midPoint){
 	midPoint.x = (p0->x + p1->x)/2;
 	midPoint.y = (p0->y + p1->y)/2;
+}
+void OHCamera::mouseCall(int event, int x, int y, int flags, void *param){
+		switch(event){
+			case CV_EVENT_LBUTTONDOWN:
+				//cout << "Button Down " << endl;
+				//cout << static_cast<OHCamera*>(param)->calPosPoint << endl;
+				if(static_cast<OHCamera*>(param)->calPosPoint == 99){
+					static_cast<OHCamera*>(param)->ident_proc = true;
+					static_cast<OHCamera*>(param)->bots[0].sessionId = 99;
+					static_cast<OHCamera*>(param)->getPos(x, y, 0);
+				}
+				else if(static_cast<OHCamera*>(param)->calPosPoint){
+					static_cast<OHCamera*>(param)->setPosPoint(x, y);	
+					//cout << "Cal Point Set" << endl;			
+				}					
+				break;	
+			
+		}
+	
+}
+void OHCamera::setPosPoint(int x, int y){
+	gridPoints[calPosPoint-1] = cvPoint(x, y);
+	cout << "Mouse clicked at: " << x << " " << y << endl;
+	
+	calcAuxGridPoints();
+		
+		
+	
+}
+void OHCamera::calcAuxGridPoints(){
+	// recompute information for pos2D
+	uWidthPix = getLineLength(&gridPoints[0], &gridPoints[1]);
+	lWidthPix = getLineLength(&gridPoints[2], &gridPoints[3]);
+	lLengthPix = getLineLength(&gridPoints[0], &gridPoints[3]);
+	rLengthPix = getLineLength(&gridPoints[1], &gridPoints[2]);
+	
+	getMidPoint(&gridPoints[0], &gridPoints[1], auxGridPoints[0] );
+	getMidPoint(&gridPoints[1], &gridPoints[2], auxGridPoints[1] );
+	getMidPoint(&gridPoints[2], &gridPoints[3], auxGridPoints[2]);
+	getMidPoint(&gridPoints[3], &gridPoints[0], auxGridPoints[3]);
+	
+	
+	
+}
+void OHCamera::displayScreenMessage(string message, double time){
+			screenMsg = message;
+			screenMessageTimer.start();
+			displayScreenMsg = true;
+}
+void OHCamera::drawGrid(IplImage * out){
+		for(int i=0; i<3; i++){
+			cvLine(out, gridPoints[i], gridPoints[i+1], cvScalar(255));
+		}
+		cvLine(out, gridPoints[3], gridPoints[0], cvScalar(255));
+		for(int i=4; i<7; i++){			
+			cvLine(out, gridPoints[i], gridPoints[i+1], cvScalar(255));
+		}
+		cvLine(out, gridPoints[7], gridPoints[4], cvScalar(255));
+		cvCircle(out, gridPoints[8], 5, cvScalar(255));
+	
+		// Auxiliary Points
+		cvLine(out, auxGridPoints[0], auxGridPoints[2], cvScalar(255));
+		cvLine(out, auxGridPoints[1], auxGridPoints[3], cvScalar(255));
+		
 }

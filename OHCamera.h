@@ -20,13 +20,14 @@
 #include <sstream>
 #include <cstring>
 #include <math.h>
+//#include <gtk-2.0/gtk/gtk.h>
 
 
 using namespace std;
 class OHCamera {
  public:
   //OHCamera(string host, string dbname, string user, string pwd);
-  OHCamera(int cam, string botsN[]);
+  OHCamera(int cam, string botsN[], CvPoint[]);
   OHCamera(const OHCamera& orig);
   virtual ~OHCamera();
   int  getState() const { return mCurrentState;}
@@ -72,14 +73,16 @@ class OHCamera {
 		  usleep(500);
 	  }
   }
-  
+  int robotArea; // Make this private
+  bool macTest;
+	
  private:
-  int uniqueRobotIdTracking; // For now we are tracking only one robot. 
+  //int uniqueRobotIdTracking; // For now we are tracking only one robot. 
   bool ident_sent;
   bool ident_proc;
   bool endProgram; 
   bool sendCamposeApproved; // TODO: Change this
-	
+  int calPosPoint;
   
 	
   
@@ -91,7 +94,7 @@ class OHCamera {
   
   
   bool skipFrame;
-  int robotArea;
+  
   int difAreaAr;
   int difAreaAb;
   int beatCircle;
@@ -113,20 +116,18 @@ class OHCamera {
   int camera;
   int binaryThresholdMin;
   int binaryThresholdMax;
-  int upperLeftCornerX;
-  int upperLeftCornerY;
-  int upperRightCornerX;
-  int upperRightCornerY;
-  int lowerLeftCornerX;
-  int lowerLeftCornerY;
-  int lowerRightCornerX;
-  int lowerRightCornerY;
   CvCapture* capture;
   
   IplImage* frame;
   IplImage* finalFrame;
   IplImage* gray_im;
   IplImage* binary_im;
+  IplImage * dst;
+	
+  CvMat* rot_mat;
+  double angle;
+  double scale; 	
+	
   
   int drop; 
   
@@ -144,6 +145,7 @@ class OHCamera {
   static const double MAX_TIME_STATE   = 10.0;
   metrobotics::PosixTimer mSilenceTimer;
   metrobotics::PosixTimer mStateTimer;
+  
   
   bool read(std::stringstream& ss);
   bool write(const std::stringstream& ss);
@@ -167,9 +169,27 @@ class OHCamera {
   int getImage(int argc, char ** argv); // old main. 
   void imageLoop();
   void checkKey();
-  void initId(botId&,string);	
+  void initId(botId&,string);
+  static void mouseCall(int, int, int, int, void *);	
+  void setPosPoint(int, int);
   
+  void displayScreenMessage(string, double);
+  string screenMsg;
+  bool displayScreenMsg;
+  metrobotics::PosixTimer screenMessageTimer;
+  
+  // Pos2D
+  static const int MAXGRIDPOINTS = 9;
+  static const int AUXGRIDPOINTS = 12;
+  CvPoint gridPoints[MAXGRIDPOINTS];
+  CvPoint auxGridPoints[AUXGRIDPOINTS];
+  CvPoint cmGridPoints[MAXGRIDPOINTS];
+  void drawGrid(IplImage * );
+  void getPos(int, int, int);
+  void calcAuxGridPoints();
 	
+  int uWidthPix, lWidthPix, lLengthPix, rLengthPix;
+  int uWidthCm, lWidthCm, lLengthCm, rLengthCm; 
   
 };
 
