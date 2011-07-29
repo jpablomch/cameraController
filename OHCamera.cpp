@@ -15,9 +15,17 @@ using namespace metrobotics;
 
 //OHCamera::OHCamera(string host, string dbname, string user, string pwd):mIOService(), mSocket(mIOService), host(host), dbname(dbname), user(user), pwd(pwd){
 OHCamera::OHCamera(int cameraNum, string botN[], CvPoint camData[]):mIOService(), mSocket(mIOService), endProgram(false){
+  
   mNameID = UID_OHCAMERA;
   mTypeID = SID_OHCAMERA;
   
+  //int numC [10];
+  //itoa(cameraNum, numC, 10);
+  //mNameID.append(numC);
+  	
+  string numC = boost::lexical_cast<string>(cameraNum);
+	mNameID.append(numC);
+	
   for(int i=0; i<MAXROBOTS; i++){
   	initId(bots[i], botN[i]);
   }
@@ -1196,12 +1204,32 @@ void OHCamera::getPos(int x, int y, botId bots[], int id){
 	// First get accurate pixel position.
 	int d = 100000; // Change this.
 	int dpts[9];
+	int menX = gridPoints[0].x;  
+	int mayX = gridPoints[0].x;
+	int menY = gridPoints[0].y; 
+	int mayY = gridPoints[0].y;
+	bool adent = false; 
+
 	for(int i = 0; i<9; i++){
 		dpts[i] = getLineLength(&gridPoints[i], &current);
 		if(d>dpts[i]){
 			d = dpts[i];
 			closestIndex = i;
 		}
+		if(i < 4){
+			if(gridPoints[i].x < menX){
+				menX = gridPoints[i].x;
+			}
+			if(gridPoints[i].x > mayX){
+				mayX = gridPoints[i].x;
+			}
+			if(gridPoints[i].y < menY){
+				menY = gridPoints[i].y;
+			}
+			if(gridPoints[i].y > mayY){
+				mayY = gridPoints[i].y;
+			}
+		} 
 	}
 	//cout << "Closest Point: " << closestIndex << endl;
 	
@@ -1213,8 +1241,14 @@ void OHCamera::getPos(int x, int y, botId bots[], int id){
 	//cout << x << " " << y << " " << theta << " " << bots[id].name << endl;
 	//cout << dx << " " << dy << endl;
 	
+	if(x > menX && x < mayX && y > menY && y < mayY){
+		adent = true;
+		if (macTest) {
+			cout << "adent" << endl;
+		}
+	}
+
 	// ratio to use
-	
 	// Second get cm position
 	// TODO: use closest points.
 	// Either use uWidthCm or lWidthCm
@@ -1340,8 +1374,11 @@ void OHCamera::getPos(int x, int y, botId bots[], int id){
 	
 	bots[id].posX = x;
 	bots[id].posY = y;
-	bots[id].sendCampose = true;
-	
+		
+	// Send only if bot is inside the main Grid
+	if(adent){
+		bots[id].sendCampose = true;
+	}
 }
 
 void OHCamera::checkKey(){
@@ -1426,6 +1463,9 @@ void OHCamera::mouseCall(int event, int x, int y, int flags, void *param){
 					static_cast<OHCamera*>(param)->ident_proc = true;
 					static_cast<OHCamera*>(param)->bots[0].sessionId = 99;
 					static_cast<OHCamera*>(param)->getPos(x, y, static_cast<OHCamera*>(param)->bots, 0);
+					if(static_cast<OHCamera*>(param)->macTest){
+						cout << x << " " << y << endl;
+					}
 				}
 				else if(static_cast<OHCamera*>(param)->calPosPoint){
 					static_cast<OHCamera*>(param)->setPosPoint(x, y);	

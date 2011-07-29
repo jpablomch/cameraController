@@ -11,7 +11,7 @@
 #include <boost/asio.hpp>
 #include <boost/thread.hpp>
 #include "metrobotics.h"
-
+#include <boost/lexical_cast.hpp>
 
 #include <iostream>
 #include <cv.h>

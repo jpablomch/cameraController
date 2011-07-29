@@ -17,10 +17,11 @@
 using namespace std;
 
 void displayUsage(char** argv){
-	cout << "USAGE: " << argv[0] << " [ options ]" << endl << endl;
-	cout << "[ options ] " << endl ;
-	cout << "\t-s <server_hostname>:<server_port>" << endl;
-	cout << "\t-c <cameraNumber>" << endl;
+	cout << "USAGE: " << argv[0] << " [config file]" << endl;
+	//cout << "USAGE: " << argv[0] << " [ options ]" << endl << endl;
+	//cout << "[ options ] " << endl ;
+	//cout << "\t-s <server_hostname>:<server_port>" << endl;
+	//cout << "\t-c <cameraNumber>" << endl;
 	// exit(1);
 	return;
 }
@@ -188,9 +189,14 @@ int main(int argc, char **argv)
     int server_port = 0;// = 6667;
     string server_hostname = "";// = "localhost";
     int cameraNum = -1;
+    if (argc < 1 && argc > 2){
+    	displayUsage(argv);
+	return -1;
+    }
+    const char* filepath = argv[1];
     //const char* filepath = "../../../config_files/cam.conf";
     //const char* filepath = "../../config_files/cam.conf";
-    const char* filepath = "config_files/cam.conf";
+    //const char* filepath = "config_files/cam.conf";
     ifstream configfile(filepath);
     string botNames[3]; // TODO: Use MAXROBOTS from definitions    
 	CvPoint camData[18];
