@@ -189,7 +189,7 @@ int main(int argc, char **argv)
     int server_port = 0;// = 6667;
     string server_hostname = "";// = "localhost";
     int cameraNum = -1;
-    if (argc < 1 && argc > 2){
+    if (argc!= 2){
     	displayUsage(argv);
 	return -1;
     }

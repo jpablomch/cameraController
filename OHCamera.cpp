@@ -206,7 +206,7 @@ bool OHCamera::startCamera(){
     }
 	
 	cvNamedWindow("video", 1); // CV_WINDOW_NORMAL); // | CV_GUI_NORMAL);
-	cvNamedWindow("control", CV_WINDOW_NORMAL);
+	cvNamedWindow("control", 1); // CV_WINDOW_NORMAL);
 	cvSetMouseCallback("video", &mouseCall, this);
 	//cvCreateButton("pointA", &buttonCall, this, CV_RADIOBOX, 0);
 	//createButton("button5",buttonCall,NULL,CV_RADIOBOX,0);	
